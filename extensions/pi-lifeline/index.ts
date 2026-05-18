@@ -386,8 +386,8 @@ export default function lifelineExtension(pi: ExtensionAPI) {
       const ar = readAutoresearchState(ctx.cwd);
       const decision = shouldTriggerLifeline(ar.runs, config, state, ar.direction);
 
-      if (command === "sample-config") {
-        ctx.ui.notify(JSON.stringify({
+      if (command === "sample-config" || command === "init") {
+        const sample = {
           auto: true,
           action: "nudge",
           minRunsBetweenCalls: 5,
@@ -396,7 +396,20 @@ export default function lifelineExtension(pi: ExtensionAPI) {
           maxCallsPerSession: 10,
           advisor: { provider: "openai", model: "gpt-5.5", maxTokens: 4096, temperature: 0.7 },
           includeAutoresearchContext: true,
-        }, null, 2), "info");
+        };
+
+        if (command === "init") {
+          const target = configPath(ctx.cwd);
+          if (fs.existsSync(target)) {
+            ctx.ui.notify(`pi-lifeline config already exists: ${target}`, "warning");
+            return;
+          }
+          fs.writeFileSync(target, JSON.stringify(sample, null, 2) + "\n");
+          ctx.ui.notify(`Created ${target}. Edit advisor.provider/model if needed, then /reload.`, "info");
+          return;
+        }
+
+        ctx.ui.notify(JSON.stringify(sample, null, 2), "info");
         return;
       }
 
@@ -409,7 +422,7 @@ export default function lifelineExtension(pi: ExtensionAPI) {
         `session calls: ${state.callsThisSession}, lastCallRun: ${state.lastCallRun ?? "never"}`,
         `autoresearch runs: ${ar.runs.length}`,
         `current decision: ${decision.shouldTrigger ? `trigger (${decision.reason})` : "no trigger"}`,
-        "Use /lifeline sample-config to print a starter pi-lifeline.json.",
+        "Use /lifeline init to create pi-lifeline.json, or /lifeline sample-config to print it.",
       ].join("\n"), "info");
     },
   });

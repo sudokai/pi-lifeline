@@ -87,6 +87,29 @@ test("phone_a_friend returns fake advisor response without calling a model", asy
   }
 });
 
+test("/lifeline init creates a starter config without overwriting", async () => {
+  const { commands } = makeHarness();
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "pi-lifeline-init-"));
+  const notices: Array<{ text: string; level: string }> = [];
+  const ctx = makeCtx(cwd) as any;
+  ctx.ui.notify = (text: string, level: string) => notices.push({ text, level });
+
+  await commands.get("lifeline").handler("init", ctx);
+
+  const configPath = path.join(cwd, "pi-lifeline.json");
+  assert.ok(fs.existsSync(configPath));
+  const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  assert.equal(config.action, "nudge");
+  assert.equal(config.triggerAfterConsecutiveFailures, 3);
+  assert.equal(config.advisor.provider, "openai");
+  assert.match(notices.at(-1)?.text ?? "", /Created/);
+
+  fs.writeFileSync(configPath, JSON.stringify({ sentinel: true }));
+  await commands.get("lifeline").handler("init", ctx);
+  assert.deepEqual(JSON.parse(fs.readFileSync(configPath, "utf-8")), { sentinel: true });
+  assert.match(notices.at(-1)?.text ?? "", /already exists/);
+});
+
 test("log_experiment result with three consecutive failures sends a lifeline nudge", async () => {
   const { handlers, sent } = makeHarness();
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "pi-lifeline-ar-"));

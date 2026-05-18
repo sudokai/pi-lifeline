@@ -60,6 +60,14 @@ Verify it loaded:
 /lifeline
 ```
 
+Create a starter config in your current project:
+
+```text
+/lifeline init
+```
+
+Then edit `pi-lifeline.json` to choose your advisor provider/model.
+
 ### Load locally for development
 
 From this repo:
@@ -158,10 +166,16 @@ Shows:
 - current trigger decision
 
 ```text
+/lifeline init
+```
+
+Creates a starter `pi-lifeline.json` in the current Pi working directory, without overwriting an existing file.
+
+```text
 /lifeline sample-config
 ```
 
-Prints a starter `pi-lifeline.json`.
+Prints the starter config without writing a file.
 
 ## Autoresearch integration
 
