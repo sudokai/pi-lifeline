@@ -1,0 +1,49 @@
+{
+  "name": "pi-lifeline",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Pi extension that lets smaller models phone a stronger advisor model when autoresearch gets stuck.",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "lifeline",
+    "autoresearch",
+    "advisor"
+  ],
+  "license": "MIT",
+  "author": "Robert Zolkos",
+  "homepage": "https://github.com/robzolkos/pi-lifeline#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robzolkos/pi-lifeline.git"
+  },
+  "bugs": {
+    "url": "https://github.com/robzolkos/pi-lifeline/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "extensions",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/pi-lifeline"
+    ]
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "check": "node --experimental-strip-types --check extensions/pi-lifeline/index.ts && node --experimental-strip-types --check extensions/pi-lifeline/policy.ts",
+    "prepublishOnly": "npm run check && npm test"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "^0.75.1",
+    "@earendil-works/pi-coding-agent": "^0.75.1",
+    "@earendil-works/pi-tui": "^0.75.1",
+    "typebox": "^1.1.38"
+  }
+}
