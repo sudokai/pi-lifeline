@@ -1,6 +1,6 @@
 {
   "name": "pi-lifeline",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "Pi extension that lets smaller models phone a stronger advisor model when autoresearch gets stuck.",
   "keywords": [
@@ -40,10 +40,10 @@
     "check": "node --experimental-strip-types --check extensions/pi-lifeline/index.ts && node --experimental-strip-types --check extensions/pi-lifeline/policy.ts",
     "prepublishOnly": "npm run check && npm test"
   },
-  "dependencies": {
-    "@earendil-works/pi-ai": "^0.75.1",
-    "@earendil-works/pi-coding-agent": "^0.75.1",
-    "@earendil-works/pi-tui": "^0.75.1",
-    "typebox": "^1.1.38"
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
   }
 }
