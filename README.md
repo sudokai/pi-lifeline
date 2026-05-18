@@ -1,6 +1,6 @@
 # pi-lifeline
 
-A Pi extension that lets a smaller/local model **phone a stronger advisor model** when an autonomous optimization loop gets stuck.
+A Pi extension that lets a smaller/local model **ask a stronger advisor model** when an autonomous optimization loop gets stuck.
 
 Inspired by Tobi Lütke's [observation](https://x.com/tobi/status/2056198717225464307) that local models can run `pi-autoresearch` effectively when they occasionally ask a stronger model for ideas.
 
