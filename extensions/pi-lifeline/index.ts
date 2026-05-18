@@ -1,6 +1,6 @@
 import { completeSimple, getSupportedThinkingLevels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { Input, Text, truncateToWidth, type Component, type Focusable } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -284,6 +284,129 @@ function sampleConfig(overrides: Partial<LifelineConfig> = {}): LifelineConfig {
   };
 }
 
+class ScrollableSelectComponent implements Component, Focusable {
+  private input = new Input();
+  private filteredItems: string[];
+  private selectedIndex = 0;
+  private focusedValue = false;
+  private prompt: string;
+  private items: string[];
+  private theme: any;
+  private keybindings: any;
+  private done: (value: string | undefined) => void;
+  private requestRender: () => void;
+
+  constructor(
+    prompt: string,
+    items: string[],
+    theme: any,
+    keybindings: any,
+    done: (value: string | undefined) => void,
+    requestRender: () => void,
+  ) {
+    this.prompt = prompt;
+    this.items = items;
+    this.theme = theme;
+    this.keybindings = keybindings;
+    this.done = done;
+    this.requestRender = requestRender;
+    this.filteredItems = items;
+    this.input.onSubmit = () => this.selectCurrent();
+  }
+
+  get focused(): boolean {
+    return this.focusedValue;
+  }
+
+  set focused(value: boolean) {
+    this.focusedValue = value;
+    this.input.focused = value;
+  }
+
+  invalidate(): void {}
+
+  private matches(keyData: string, action: string): boolean {
+    return Boolean(this.keybindings?.matches?.(keyData, action));
+  }
+
+  private filterItems(): void {
+    const query = this.input.getValue().trim().toLowerCase();
+    this.filteredItems = query
+      ? this.items.filter((item) => item.toLowerCase().includes(query))
+      : this.items;
+    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.filteredItems.length - 1));
+  }
+
+  private selectCurrent(): void {
+    const selected = this.filteredItems[this.selectedIndex];
+    if (selected) this.done(selected);
+  }
+
+  render(width: number): string[] {
+    const lines: string[] = [];
+    lines.push(this.theme.fg?.("accent", this.theme.bold?.(this.prompt) ?? this.prompt) ?? this.prompt);
+    lines.push(this.theme.fg?.("muted", "Type to filter, ↑/↓ to move, Enter to select, Esc to cancel") ?? "Type to filter, ↑/↓ to move, Enter to select, Esc to cancel");
+    lines.push("");
+    lines.push(...this.input.render(width));
+    lines.push("");
+
+    const maxVisible = 10;
+    const startIndex = Math.max(0, Math.min(this.selectedIndex - Math.floor(maxVisible / 2), this.filteredItems.length - maxVisible));
+    const endIndex = Math.min(startIndex + maxVisible, this.filteredItems.length);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      const item = this.filteredItems[i] ?? "";
+      const isSelected = i === this.selectedIndex;
+      const prefix = isSelected ? this.theme.fg?.("accent", "→ ") ?? "→ " : "  ";
+      const text = truncateToWidth(item, Math.max(0, width - 2), "…");
+      lines.push(isSelected ? (this.theme.fg?.("accent", prefix + text) ?? prefix + text) : prefix + text);
+    }
+
+    if (this.filteredItems.length === 0) {
+      lines.push(this.theme.fg?.("muted", "  No matching models") ?? "  No matching models");
+    } else if (startIndex > 0 || endIndex < this.filteredItems.length) {
+      lines.push(this.theme.fg?.("muted", `  (${this.selectedIndex + 1}/${this.filteredItems.length})`) ?? `  (${this.selectedIndex + 1}/${this.filteredItems.length})`);
+    }
+
+    return lines;
+  }
+
+  handleInput(keyData: string): void {
+    if (this.matches(keyData, "tui.select.up")) {
+      if (this.filteredItems.length > 0) this.selectedIndex = this.selectedIndex === 0 ? this.filteredItems.length - 1 : this.selectedIndex - 1;
+    } else if (this.matches(keyData, "tui.select.down")) {
+      if (this.filteredItems.length > 0) this.selectedIndex = this.selectedIndex === this.filteredItems.length - 1 ? 0 : this.selectedIndex + 1;
+    } else if (this.matches(keyData, "tui.select.pageUp")) {
+      this.selectedIndex = Math.max(0, this.selectedIndex - 10);
+    } else if (this.matches(keyData, "tui.select.pageDown")) {
+      this.selectedIndex = Math.min(Math.max(0, this.filteredItems.length - 1), this.selectedIndex + 10);
+    } else if (this.matches(keyData, "tui.select.confirm")) {
+      this.selectCurrent();
+      return;
+    } else if (this.matches(keyData, "tui.select.cancel")) {
+      this.done(undefined);
+      return;
+    } else {
+      this.input.handleInput(keyData);
+      this.filterItems();
+    }
+    this.requestRender();
+  }
+}
+
+async function selectScrollable(ctx: ExtensionContext, prompt: string, items: string[]): Promise<string | undefined> {
+  const ui = ctx.ui as unknown as {
+    custom?: <T>(factory: (tui: any, theme: any, keybindings: any, done: (value: T) => void) => Component, options?: unknown) => Promise<T>;
+  };
+
+  if (!ui.custom) return undefined;
+  return ui.custom<string | undefined>((tui, theme, keybindings, done) => {
+    const component = new ScrollableSelectComponent(prompt, items, theme, keybindings, done, () => tui.requestRender());
+    component.focused = true;
+    return component;
+  });
+}
+
 async function buildConfigInteractively(ctx: ExtensionContext): Promise<LifelineConfig> {
   const ui = ctx.ui as unknown as {
     select?: (prompt: string, items: string[], options?: unknown) => Promise<string | undefined>;
@@ -301,7 +424,8 @@ async function buildConfigInteractively(ctx: ExtensionContext): Promise<Lifeline
     const choices = available.map((model: any) => `${model.provider}/${model.id}${model.name ? ` — ${model.name}` : ""}`);
     choices.push("Manual entry…");
 
-    const selected = await ui.select("Choose lifeline advisor model", choices);
+    const selected = await selectScrollable(ctx, "Choose lifeline advisor model", choices)
+      ?? await ui.select("Choose lifeline advisor model", choices);
     if (!selected) return sampleConfig();
 
     if (selected === "Manual entry…") {
