@@ -1,6 +1,6 @@
 {
   "name": "pi-lifeline",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Pi extension that lets smaller models phone a stronger advisor model when autoresearch gets stuck.",
   "keywords": [
