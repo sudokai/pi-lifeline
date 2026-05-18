@@ -3,6 +3,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import {
@@ -75,11 +76,15 @@ function thinkingFrom(value: unknown): ModelThinkingLevel | undefined {
     : undefined;
 }
 
-function configPath(cwd: string): string {
-  return path.join(cwd, "pi-lifeline.json");
+function agentDir(): string {
+  return process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
 }
 
-function readConfig(cwd: string): LifelineConfig {
+function configPath(_cwd?: string): string {
+  return path.join(agentDir(), "pi-lifeline.json");
+}
+
+function readConfig(cwd?: string): LifelineConfig {
   let fromFile: Record<string, unknown> = {};
   try {
     const p = configPath(cwd);
@@ -468,8 +473,9 @@ export default function lifelineExtension(pi: ExtensionAPI) {
             return;
           }
           const created = await buildConfigInteractively(ctx);
+          fs.mkdirSync(path.dirname(target), { recursive: true });
           fs.writeFileSync(target, JSON.stringify(created, null, 2) + "\n");
-          ctx.ui.notify(`Created ${target}. Reload Pi or continue — new lifeline calls will use it.`, "info");
+          ctx.ui.notify(`Created global config ${target}. Reload Pi or continue — new lifeline calls will use it.`, "info");
           return;
         }
 
@@ -486,7 +492,7 @@ export default function lifelineExtension(pi: ExtensionAPI) {
         `session calls: ${state.callsThisSession}, lastCallRun: ${state.lastCallRun ?? "never"}`,
         `autoresearch runs: ${ar.runs.length}`,
         `current decision: ${decision.shouldTrigger ? `trigger (${decision.reason})` : "no trigger"}`,
-        "Use /lifeline init to create pi-lifeline.json, or /lifeline sample-config to print it.",
+        "Use /lifeline init to create global pi-lifeline.json, or /lifeline sample-config to print it.",
       ].join("\n"), "info");
     },
   });

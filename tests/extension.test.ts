@@ -33,6 +33,19 @@ function makeHarness() {
   return { handlers, tools, commands, sent };
 }
 
+function withTempAgentDir(): { dir: string; restore: () => void } {
+  const previous = process.env.PI_CODING_AGENT_DIR;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-lifeline-agent-"));
+  process.env.PI_CODING_AGENT_DIR = dir;
+  return {
+    dir,
+    restore: () => {
+      if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previous;
+    },
+  };
+}
+
 function makeCtx(cwd: string) {
   return {
     cwd,
@@ -88,6 +101,8 @@ test("phone_a_friend returns fake advisor response without calling a model", asy
 });
 
 test("/lifeline init interactive wizard writes selected provider, model, thinking, and action", async () => {
+  const agent = withTempAgentDir();
+  try {
   const { commands } = makeHarness();
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "pi-lifeline-wizard-"));
   const ctx = makeCtx(cwd) as any;
@@ -108,14 +123,19 @@ test("/lifeline init interactive wizard writes selected provider, model, thinkin
 
   await commands.get("lifeline").handler("init", ctx);
 
-  const config = JSON.parse(fs.readFileSync(path.join(cwd, "pi-lifeline.json"), "utf-8"));
+  const config = JSON.parse(fs.readFileSync(path.join(agent.dir, "pi-lifeline.json"), "utf-8"));
   assert.equal(config.action, "ask");
   assert.equal(config.advisor.provider, "anthropic");
   assert.equal(config.advisor.model, "claude-opus-test");
   assert.equal(config.advisor.thinking, "high");
+  } finally {
+    agent.restore();
+  }
 });
 
 test("/lifeline init creates a starter config without overwriting", async () => {
+  const agent = withTempAgentDir();
+  try {
   const { commands } = makeHarness();
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "pi-lifeline-init-"));
   const notices: Array<{ text: string; level: string }> = [];
@@ -124,7 +144,7 @@ test("/lifeline init creates a starter config without overwriting", async () => 
 
   await commands.get("lifeline").handler("init", ctx);
 
-  const configPath = path.join(cwd, "pi-lifeline.json");
+  const configPath = path.join(agent.dir, "pi-lifeline.json");
   assert.ok(fs.existsSync(configPath));
   const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
   assert.equal(config.action, "nudge");
@@ -136,6 +156,9 @@ test("/lifeline init creates a starter config without overwriting", async () => 
   await commands.get("lifeline").handler("init", ctx);
   assert.deepEqual(JSON.parse(fs.readFileSync(configPath, "utf-8")), { sentinel: true });
   assert.match(notices.at(-1)?.text ?? "", /already exists/);
+  } finally {
+    agent.restore();
+  }
 });
 
 test("log_experiment result with three consecutive failures sends a lifeline nudge", async () => {

@@ -60,13 +60,13 @@ Verify it loaded:
 /lifeline
 ```
 
-Create a starter config in your current project:
+Create a global starter config:
 
 ```text
 /lifeline init
 ```
 
-Then edit `pi-lifeline.json` to choose your advisor provider/model.
+Then edit `~/.pi/agent/pi-lifeline.json` to adjust your advisor provider/model or thresholds.
 
 ### Load locally for development
 
@@ -88,7 +88,7 @@ As a Pi package, `package.json` exposes:
 
 ## Configuration
 
-Create `pi-lifeline.json` in the Pi working directory:
+Create `pi-lifeline.json` in your Pi agent config directory, usually `~/.pi/agent/pi-lifeline.json`:
 
 ```json
 {
@@ -171,7 +171,7 @@ Shows:
 /lifeline init
 ```
 
-Opens a small setup wizard, asks for the advisor model, thinking/reasoning level, and auto-action policy, then creates `pi-lifeline.json` in the current Pi working directory without overwriting an existing file.
+Opens a small setup wizard, asks for the advisor model, thinking/reasoning level, and auto-action policy, then creates global `~/.pi/agent/pi-lifeline.json` without overwriting an existing file.
 
 ```text
 /lifeline sample-config
