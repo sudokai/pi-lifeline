@@ -101,6 +101,7 @@ Create `pi-lifeline.json` in the Pi working directory:
   "advisor": {
     "provider": "openai",
     "model": "gpt-5.5",
+    "thinking": "high",
     "maxTokens": 4096,
     "temperature": 0.7
   },
@@ -113,6 +114,7 @@ You can also set:
 ```bash
 export PI_LIFELINE_ADVISOR_PROVIDER=openai
 export PI_LIFELINE_ADVISOR_MODEL=gpt-5.5
+export PI_LIFELINE_THINKING=high
 export PI_LIFELINE_MAX_TOKENS=4096
 export PI_LIFELINE_TEMPERATURE=0.7
 ```
@@ -169,7 +171,7 @@ Shows:
 /lifeline init
 ```
 
-Creates a starter `pi-lifeline.json` in the current Pi working directory, without overwriting an existing file.
+Opens a small setup wizard, asks for the advisor model, thinking/reasoning level, and auto-action policy, then creates `pi-lifeline.json` in the current Pi working directory without overwriting an existing file.
 
 ```text
 /lifeline sample-config

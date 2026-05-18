@@ -1,4 +1,4 @@
-import { complete } from "@earendil-works/pi-ai";
+import { completeSimple, getSupportedThinkingLevels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
@@ -16,6 +16,7 @@ import {
 interface AdvisorConfig {
   provider?: string;
   model?: string;
+  thinking?: ModelThinkingLevel;
   maxTokens: number;
   temperature: number;
 }
@@ -40,6 +41,7 @@ const DEFAULT_CONFIG: LifelineConfig = {
   advisor: {
     provider: process.env.PI_LIFELINE_ADVISOR_PROVIDER,
     model: process.env.PI_LIFELINE_ADVISOR_MODEL,
+    thinking: thinkingFrom(process.env.PI_LIFELINE_THINKING),
     maxTokens: numberFromEnv("PI_LIFELINE_MAX_TOKENS", 4096),
     temperature: numberFromEnv("PI_LIFELINE_TEMPERATURE", 0.7),
   },
@@ -67,6 +69,12 @@ function numberFromEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function thinkingFrom(value: unknown): ModelThinkingLevel | undefined {
+  return value === "off" || value === "minimal" || value === "low" || value === "medium" || value === "high" || value === "xhigh"
+    ? value
+    : undefined;
+}
+
 function configPath(cwd: string): string {
   return path.join(cwd, "pi-lifeline.json");
 }
@@ -92,6 +100,7 @@ function readConfig(cwd: string): LifelineConfig {
     advisor: {
       provider: stringOr(advisorInput.provider, DEFAULT_CONFIG.advisor.provider),
       model: stringOr(advisorInput.model, DEFAULT_CONFIG.advisor.model),
+      thinking: thinkingFrom(advisorInput.thinking) ?? DEFAULT_CONFIG.advisor.thinking,
       maxTokens: positiveNumber(advisorInput.maxTokens, DEFAULT_CONFIG.advisor.maxTokens),
       temperature: nonNegativeNumber(advisorInput.temperature, DEFAULT_CONFIG.advisor.temperature),
     },
@@ -226,7 +235,7 @@ async function askAdvisor(
   if (!auth.ok) throw new Error(`Advisor auth failed: ${auth.error}`);
   if (!auth.apiKey) throw new Error(`No API key configured for advisor provider: ${provider}`);
 
-  const response = await complete(
+  const response = await completeSimple(
     model,
     {
       messages: [{
@@ -240,6 +249,7 @@ async function askAdvisor(
       headers: auth.headers,
       maxTokens: config.advisor.maxTokens,
       temperature: config.advisor.temperature,
+      reasoning: config.advisor.thinking && config.advisor.thinking !== "off" ? config.advisor.thinking : undefined,
       signal: ctx.signal,
     },
   );
@@ -252,6 +262,70 @@ async function askAdvisor(
 
   if (!text) throw new Error("Advisor returned an empty response");
   return { text, provider, model: modelId, fake: false };
+}
+
+function sampleConfig(overrides: Partial<LifelineConfig> = {}): LifelineConfig {
+  return {
+    ...DEFAULT_CONFIG,
+    ...overrides,
+    advisor: {
+      provider: "openai",
+      model: "gpt-5.5",
+      thinking: "high",
+      maxTokens: 4096,
+      temperature: 0.7,
+      ...(overrides.advisor ?? {}),
+    },
+  };
+}
+
+async function buildConfigInteractively(ctx: ExtensionContext): Promise<LifelineConfig> {
+  const ui = ctx.ui as unknown as {
+    select?: (prompt: string, items: string[], options?: unknown) => Promise<string | undefined>;
+    input?: (prompt: string, placeholder?: string) => Promise<string | undefined>;
+  };
+
+  if (!ui.select) return sampleConfig();
+
+  let provider = "openai";
+  let modelId = "gpt-5.5";
+  let thinking: ModelThinkingLevel | undefined = "high";
+
+  try {
+    const available = await ctx.modelRegistry.getAvailable();
+    const choices = available.map((model: any) => `${model.provider}/${model.id}${model.name ? ` — ${model.name}` : ""}`);
+    choices.push("Manual entry…");
+
+    const selected = await ui.select("Choose lifeline advisor model", choices);
+    if (!selected) return sampleConfig();
+
+    if (selected === "Manual entry…") {
+      provider = (await ui.input?.("Advisor provider", "openai"))?.trim() || provider;
+      modelId = (await ui.input?.("Advisor model", "gpt-5.5"))?.trim() || modelId;
+    } else {
+      const selectedModel = available[choices.indexOf(selected)] as any;
+      provider = selectedModel.provider;
+      modelId = selectedModel.id;
+      const levels = getSupportedThinkingLevels(selectedModel);
+      const levelChoices = levels.length > 0 ? levels : ["off"];
+      const selectedThinking = await ui.select("Advisor thinking/reasoning level", levelChoices);
+      thinking = thinkingFrom(selectedThinking) ?? undefined;
+    }
+  } catch {
+    provider = (await ui.input?.("Advisor provider", "openai"))?.trim() || provider;
+    modelId = (await ui.input?.("Advisor model", "gpt-5.5"))?.trim() || modelId;
+  }
+
+  const actionChoice = await ui.select("When stuck, what should lifeline do?", [
+    "nudge — tell the agent to call phone_a_friend (recommended)",
+    "ask — automatically call the advisor",
+  ]);
+  const action = actionChoice?.startsWith("ask") ? "ask" : "nudge";
+
+  return sampleConfig({
+    action,
+    advisor: { provider, model: modelId, thinking, maxTokens: 4096, temperature: 0.7 },
+  });
 }
 
 function runtimeStore() {
@@ -387,36 +461,26 @@ export default function lifelineExtension(pi: ExtensionAPI) {
       const decision = shouldTriggerLifeline(ar.runs, config, state, ar.direction);
 
       if (command === "sample-config" || command === "init") {
-        const sample = {
-          auto: true,
-          action: "nudge",
-          minRunsBetweenCalls: 5,
-          triggerAfterConsecutiveFailures: 3,
-          triggerAfterPlateauRuns: 6,
-          maxCallsPerSession: 10,
-          advisor: { provider: "openai", model: "gpt-5.5", maxTokens: 4096, temperature: 0.7 },
-          includeAutoresearchContext: true,
-        };
-
         if (command === "init") {
           const target = configPath(ctx.cwd);
           if (fs.existsSync(target)) {
             ctx.ui.notify(`pi-lifeline config already exists: ${target}`, "warning");
             return;
           }
-          fs.writeFileSync(target, JSON.stringify(sample, null, 2) + "\n");
-          ctx.ui.notify(`Created ${target}. Edit advisor.provider/model if needed, then /reload.`, "info");
+          const created = await buildConfigInteractively(ctx);
+          fs.writeFileSync(target, JSON.stringify(created, null, 2) + "\n");
+          ctx.ui.notify(`Created ${target}. Reload Pi or continue — new lifeline calls will use it.`, "info");
           return;
         }
 
-        ctx.ui.notify(JSON.stringify(sample, null, 2), "info");
+        ctx.ui.notify(JSON.stringify(sampleConfig(), null, 2), "info");
         return;
       }
 
       ctx.ui.notify([
         "☎️ pi-lifeline",
         `config: ${fs.existsSync(configPath(ctx.cwd)) ? configPath(ctx.cwd) : "defaults/env"}`,
-        `advisor: ${config.advisor.provider ?? "(unset)"}/${config.advisor.model ?? "(unset)"}`,
+        `advisor: ${config.advisor.provider ?? "(unset)"}/${config.advisor.model ?? "(unset)"}${config.advisor.thinking ? ` thinking=${config.advisor.thinking}` : ""}`,
         `auto: ${config.auto}, action: ${config.action}`,
         `thresholds: failures=${config.triggerAfterConsecutiveFailures}, plateau=${config.triggerAfterPlateauRuns}, minRunsBetweenCalls=${config.minRunsBetweenCalls}, maxCalls=${config.maxCallsPerSession}`,
         `session calls: ${state.callsThisSession}, lastCallRun: ${state.lastCallRun ?? "never"}`,

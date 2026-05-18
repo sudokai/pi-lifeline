@@ -87,6 +87,34 @@ test("phone_a_friend returns fake advisor response without calling a model", asy
   }
 });
 
+test("/lifeline init interactive wizard writes selected provider, model, thinking, and action", async () => {
+  const { commands } = makeHarness();
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "pi-lifeline-wizard-"));
+  const ctx = makeCtx(cwd) as any;
+  const choices = [
+    "anthropic/claude-opus-test — Claude Opus Test",
+    "high",
+    "ask — automatically call the advisor",
+  ];
+  ctx.modelRegistry.getAvailable = async () => [{
+    provider: "anthropic",
+    id: "claude-opus-test",
+    name: "Claude Opus Test",
+    reasoning: true,
+    thinkingLevelMap: { off: null, high: "high", xhigh: "max" },
+  }];
+  ctx.ui.select = async () => choices.shift();
+  ctx.ui.notify = () => {};
+
+  await commands.get("lifeline").handler("init", ctx);
+
+  const config = JSON.parse(fs.readFileSync(path.join(cwd, "pi-lifeline.json"), "utf-8"));
+  assert.equal(config.action, "ask");
+  assert.equal(config.advisor.provider, "anthropic");
+  assert.equal(config.advisor.model, "claude-opus-test");
+  assert.equal(config.advisor.thinking, "high");
+});
+
 test("/lifeline init creates a starter config without overwriting", async () => {
   const { commands } = makeHarness();
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "pi-lifeline-init-"));
