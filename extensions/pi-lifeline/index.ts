@@ -19,7 +19,6 @@ interface AdvisorConfig {
   model?: string;
   thinking?: ModelThinkingLevel;
   maxTokens: number;
-  temperature: number;
 }
 
 interface LifelineConfig extends LifelinePolicyConfig {
@@ -44,7 +43,6 @@ const DEFAULT_CONFIG: LifelineConfig = {
     model: process.env.PI_LIFELINE_ADVISOR_MODEL,
     thinking: thinkingFrom(process.env.PI_LIFELINE_THINKING),
     maxTokens: numberFromEnv("PI_LIFELINE_MAX_TOKENS", 4096),
-    temperature: numberFromEnv("PI_LIFELINE_TEMPERATURE", 0.7),
   },
   includeAutoresearchContext: true,
 };
@@ -107,7 +105,6 @@ function readConfig(cwd?: string): LifelineConfig {
       model: stringOr(advisorInput.model, DEFAULT_CONFIG.advisor.model),
       thinking: thinkingFrom(advisorInput.thinking) ?? DEFAULT_CONFIG.advisor.thinking,
       maxTokens: positiveNumber(advisorInput.maxTokens, DEFAULT_CONFIG.advisor.maxTokens),
-      temperature: nonNegativeNumber(advisorInput.temperature, DEFAULT_CONFIG.advisor.temperature),
     },
     includeAutoresearchContext: typeof fromFile.includeAutoresearchContext === "boolean"
       ? fromFile.includeAutoresearchContext
@@ -123,9 +120,6 @@ function positiveNumber(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-function nonNegativeNumber(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
-}
 
 function readTextIfExists(filePath: string, maxChars: number): string {
   try {
@@ -253,11 +247,13 @@ async function askAdvisor(
       apiKey: auth.apiKey,
       headers: auth.headers,
       maxTokens: config.advisor.maxTokens,
-      temperature: config.advisor.temperature,
       reasoning: config.advisor.thinking && config.advisor.thinking !== "off" ? config.advisor.thinking : undefined,
       signal: ctx.signal,
     },
   );
+  if (response.stopReason === "error") {
+    throw new Error(`Advisor call failed: ${response.errorMessage ?? "unknown model error"}`);
+  }
 
   const text = response.content
     .filter((part): part is { type: "text"; text: string } => part.type === "text")
@@ -278,7 +274,6 @@ function sampleConfig(overrides: Partial<LifelineConfig> = {}): LifelineConfig {
       model: "gpt-5.5",
       thinking: "high",
       maxTokens: 4096,
-      temperature: 0.7,
       ...(overrides.advisor ?? {}),
     },
   };
@@ -453,7 +448,7 @@ async function buildConfigInteractively(ctx: ExtensionContext): Promise<Lifeline
 
   return sampleConfig({
     action,
-    advisor: { provider, model: modelId, thinking, maxTokens: 4096, temperature: 0.7 },
+    advisor: { provider, model: modelId, thinking, maxTokens: 4096 },
   });
 }
 
