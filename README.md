@@ -101,9 +101,7 @@ Create `pi-lifeline.json` in your Pi agent config directory, usually `~/.pi/agen
   "advisor": {
     "provider": "openai",
     "model": "gpt-5.5",
-    "thinking": "high",
-    "maxTokens": 4096
-  },
+    "thinking": "high"
   "includeAutoresearchContext": true
 }
 ```
@@ -114,8 +112,6 @@ You can also set:
 export PI_LIFELINE_ADVISOR_PROVIDER=openai
 export PI_LIFELINE_ADVISOR_MODEL=gpt-5.5
 export PI_LIFELINE_THINKING=high
-export PI_LIFELINE_MAX_TOKENS=4096
-```
 
 For tests/smoke runs without spending tokens:
 
@@ -259,9 +255,7 @@ Configure a cheap available model first:
   "maxCallsPerSession": 1,
   "advisor": {
     "provider": "google",
-    "model": "gemini-2.5-flash",
-    "maxTokens": 1024
-  }
+    "provider": "google",
 }
 ```
 

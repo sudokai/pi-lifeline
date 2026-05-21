@@ -18,7 +18,7 @@ interface AdvisorConfig {
   provider?: string;
   model?: string;
   thinking?: ModelThinkingLevel;
-  maxTokens: number;
+  maxTokens?: number;
 }
 
 interface LifelineConfig extends LifelinePolicyConfig {
@@ -42,7 +42,7 @@ const DEFAULT_CONFIG: LifelineConfig = {
     provider: process.env.PI_LIFELINE_ADVISOR_PROVIDER,
     model: process.env.PI_LIFELINE_ADVISOR_MODEL,
     thinking: thinkingFrom(process.env.PI_LIFELINE_THINKING),
-    maxTokens: numberFromEnv("PI_LIFELINE_MAX_TOKENS", 4096),
+    maxTokens: numberFromEnv("PI_LIFELINE_MAX_TOKENS"),
   },
   includeAutoresearchContext: true,
 };
@@ -61,7 +61,7 @@ const PhoneAFriendParams = Type.Object({
   model: Type.Optional(Type.String({ description: "Override advisor model from pi model registry." })),
 });
 
-function numberFromEnv(name: string, fallback: number): number {
+function numberFromEnv(name: string, fallback?: number): number | undefined {
   const raw = process.env[name];
   if (!raw) return fallback;
   const parsed = Number(raw);
@@ -116,7 +116,7 @@ function stringOr(value: unknown, fallback: string | undefined): string | undefi
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
-function positiveNumber(value: unknown, fallback: number): number {
+function positiveNumber(value: unknown, fallback: number | undefined): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
@@ -273,7 +273,6 @@ function sampleConfig(overrides: Partial<LifelineConfig> = {}): LifelineConfig {
       provider: "openai",
       model: "gpt-5.5",
       thinking: "high",
-      maxTokens: 4096,
       ...(overrides.advisor ?? {}),
     },
   };
@@ -448,7 +447,7 @@ async function buildConfigInteractively(ctx: ExtensionContext): Promise<Lifeline
 
   return sampleConfig({
     action,
-    advisor: { provider, model: modelId, thinking, maxTokens: 4096 },
+    advisor: { provider, model: modelId, thinking },
   });
 }
 
